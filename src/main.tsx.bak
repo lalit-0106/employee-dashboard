@@ -1,0 +1,510 @@
+import React from 'react'
+import ReactDOM from 'react-dom/client'
+import './style.css'
+import SearchRoundedIcon from '@mui/icons-material/SearchRounded'
+import KeyboardArrowDownRoundedIcon from '@mui/icons-material/KeyboardArrowDownRounded'
+import HomeRoundedIcon from '@mui/icons-material/HomeRounded'
+import PersonRoundedIcon from '@mui/icons-material/PersonRounded'
+import BusinessRoundedIcon from '@mui/icons-material/BusinessRounded'
+import MoreVertRoundedIcon from '@mui/icons-material/MoreVertRounded'
+import EmailRoundedIcon from '@mui/icons-material/EmailRounded'
+import PhoneRoundedIcon from '@mui/icons-material/PhoneRounded'
+import PlaceRoundedIcon from '@mui/icons-material/PlaceRounded'
+import BadgeRoundedIcon from '@mui/icons-material/BadgeRounded'
+import CakeRoundedIcon from '@mui/icons-material/CakeRounded'
+import EditRoundedIcon from '@mui/icons-material/Edit'
+import DoneRoundedIcon from '@mui/icons-material/DoneRounded'
+import ArrowForwardRoundedIcon from '@mui/icons-material/ArrowForwardRounded'
+import heroImage from './assets/hero.png'
+
+type MainTab = 'about' | 'job' | 'projects'
+type ProjectMode = 'active' | 'completed'
+type ProjectType = 'Client' | 'Internal'
+
+type UtilizationPhase = {
+  startDate: string
+  endDate: string
+  utilizationPercentage: string
+}
+
+type Project = {
+  id: string
+  accountName: string
+  name: string
+  type: ProjectType
+  mode: ProjectMode
+  utilizationPhases: UtilizationPhase[]
+  rollOffDate?: string
+}
+
+const projects: Project[] = [
+  {
+    id: 'apollo-core',
+    accountName: 'Apollo',
+    name: 'Apollo Core Modernization',
+    type: 'Client',
+    mode: 'active',
+    utilizationPhases: [
+      {
+        startDate: 'Mar 31, 2026',
+        endDate: 'Apr 30, 2026',
+        utilizationPercentage: '40%',
+      },
+      {
+        startDate: 'Apr 30, 2026',
+        endDate: 'Dec 31, 2026',
+        utilizationPercentage: '40%',
+      },
+    ],
+  },
+  {
+    id: 'workforce-pulse',
+    accountName: 'Workforce',
+    name: 'Workforce Pulse Analytics',
+    type: 'Client',
+    mode: 'active',
+    utilizationPhases: [
+      {
+        startDate: 'Feb 10, 2026',
+        endDate: 'May 15, 2026',
+        utilizationPercentage: '74%',
+      },
+      {
+        startDate: 'May 16, 2026',
+        endDate: 'Sep 12, 2026',
+        utilizationPercentage: '66%',
+      },
+    ],
+  },
+  {
+    id: 'ops-compass',
+    accountName: 'PalTech Internal',
+    name: 'Ops Compass Accelerator',
+    type: 'Internal',
+    mode: 'active',
+    utilizationPhases: [
+      {
+        startDate: 'Mar 01, 2026',
+        endDate: 'Jun 10, 2026',
+        utilizationPercentage: '48%',
+      },
+      {
+        startDate: 'Jun 11, 2026',
+        endDate: 'Aug 01, 2026',
+        utilizationPercentage: '52%',
+      },
+    ],
+  },
+  {
+    id: 'northstar-migration',
+    accountName: 'NorthStar',
+    name: 'NorthStar Cloud Migration',
+    type: 'Client',
+    mode: 'completed',
+    utilizationPhases: [
+      {
+        startDate: 'Apr 02, 2025',
+        endDate: 'Aug 15, 2025',
+        utilizationPercentage: '89%',
+      },
+      {
+        startDate: 'Aug 16, 2025',
+        endDate: 'Nov 18, 2025',
+        utilizationPercentage: '70%',
+      },
+    ],
+    rollOffDate: 'Nov 30, 2025',
+  },
+  {
+    id: 'skills-forge',
+    accountName: 'PalTech Internal',
+    name: 'Skills Forge Platform',
+    type: 'Internal',
+    mode: 'completed',
+    utilizationPhases: [
+      {
+        startDate: 'Jan 20, 2025',
+        endDate: 'Apr 30, 2025',
+        utilizationPercentage: '64%',
+      },
+      {
+        startDate: 'May 01, 2025',
+        endDate: 'Jul 22, 2025',
+        utilizationPercentage: '57%',
+      },
+    ],
+    rollOffDate: 'Aug 04, 2025',
+  },
+]
+
+const projectModeLabel: Record<ProjectMode, string> = {
+  active: 'Active Projects',
+  completed: 'Completed Projects',
+}
+
+const tabs: { id: MainTab; label: string }[] = [
+  { id: 'about', label: 'About' },
+  { id: 'job', label: 'Job' },
+  { id: 'projects', label: 'Projects' },
+]
+
+function getMainTabFromUrl(): MainTab {
+  if (typeof window === 'undefined') {
+    return 'job'
+  }
+  const tab = new URLSearchParams(window.location.search).get('tab')
+  if (tab === 'about' || tab === 'job' || tab === 'projects') {
+    return tab
+  }
+  return 'job'
+}
+
+function getProjectModeFromUrl(): ProjectMode {
+  if (typeof window === 'undefined') {
+    return 'active'
+  }
+  const mode = new URLSearchParams(window.location.search).get('mode')
+  if (mode === 'active' || mode === 'completed') {
+    return mode
+  }
+  return 'active'
+}
+
+function ProjectsSection({
+  mode,
+  onModeChange,
+}: {
+  mode: ProjectMode
+  onModeChange: (mode: ProjectMode) => void
+}) {
+  const modeProjects = React.useMemo(() => projects.filter((project) => project.mode === mode), [mode])
+  const [selectedId, setSelectedId] = React.useState(modeProjects[0]?.id ?? '')
+
+  React.useEffect(() => {
+    if (!modeProjects.some((project) => project.id === selectedId)) {
+      setSelectedId(modeProjects[0]?.id ?? '')
+    }
+  }, [modeProjects, selectedId])
+
+  const selectedProject = modeProjects.find((project) => project.id === selectedId)
+
+  return (
+    <section className="card projects-card">
+      <div className="card__header">
+        <h3>Projects</h3>
+      </div>
+
+      <div className="project-mode-toggle">
+        {(['active', 'completed'] as const).map((projectMode) => (
+          <button
+            key={projectMode}
+            className={`project-mode-toggle__btn ${mode === projectMode ? 'project-mode-toggle__btn--active' : ''}`}
+            onClick={() => onModeChange(projectMode)}
+            type="button"
+          >
+            {projectModeLabel[projectMode]}
+          </button>
+        ))}
+      </div>
+
+      <div className="projects-layout">
+        <aside className="projects-list" aria-label={projectModeLabel[mode]}>
+          {modeProjects.map((project) => (
+            <button
+              key={project.id}
+              className={`project-item ${selectedId === project.id ? 'project-item--active' : ''}`}
+              onClick={() => setSelectedId(project.id)}
+              type="button"
+            >
+              <div className="project-item__head">
+                <strong>
+                  {project.accountName} : {project.name}
+                </strong>
+                <span className={`type-pill ${project.type === 'Client' ? 'type-pill--client' : 'type-pill--internal'}`}>
+                  {project.type}
+                </span>
+              </div>
+            </button>
+          ))}
+        </aside>
+
+        {selectedProject ? (
+          <article className="project-timeline">
+            <header className="project-timeline__head">
+              <h4>{selectedProject.name}</h4>
+              <span className={`type-pill ${selectedProject.type === 'Client' ? 'type-pill--client' : 'type-pill--internal'}`}>
+                {selectedProject.type}
+              </span>
+            </header>
+
+            <div
+              className="timeline-track"
+              role="img"
+              aria-label="Vertical project timeline from start through utilization windows to roll-off"
+            >
+              <div className="timeline-step">
+                <span className="timeline-dot" />
+                <label>Start Date</label>
+                <strong>{selectedProject.utilizationPhases[0]?.startDate}</strong>
+              </div>
+
+              {selectedProject.utilizationPhases.map((phase, index) => (
+                <div className="timeline-step" key={`${selectedProject.id}-phase-${index}`}>
+                  <span className="timeline-dot timeline-dot--utilization" />
+                  <label>Utilization Window {index + 1}</label>
+                  <strong className="timeline-range">
+                    <span>{phase.startDate}</span>
+                    <ArrowForwardRoundedIcon />
+                    <span>{phase.endDate}</span>
+                  </strong>
+                  <span className="timeline-utilization">{phase.utilizationPercentage} utilization</span>
+                </div>
+              ))}
+
+              {selectedProject.mode === 'completed' && selectedProject.rollOffDate ? (
+                <div className="timeline-step">
+                  <span className="timeline-dot timeline-dot--rolloff" />
+                  <label>Roll-off Date</label>
+                  <strong>{selectedProject.rollOffDate}</strong>
+                </div>
+              ) : null}
+            </div>
+          </article>
+        ) : null}
+      </div>
+    </section>
+  )
+}
+
+function ProfileDetailView() {
+  return (
+    <>
+      <section className="card">
+        <div className="card__header">
+          <h3>Personal Information</h3>
+          <button className="edit-btn" type="button">
+            <EditRoundedIcon />
+            Edit
+          </button>
+        </div>
+
+        <div className="info-grid info-grid--three">
+          <div className="info-item">
+            <PersonRoundedIcon />
+            <div>
+              <strong>Mulpuru Lalit Kalyan</strong>
+              <span>Name</span>
+            </div>
+          </div>
+          <div className="info-item">
+            <BadgeRoundedIcon />
+            <div>
+              <strong>Lalit Mulpuru</strong>
+              <span>Display Name</span>
+            </div>
+          </div>
+          <div className="info-item">
+            <DoneRoundedIcon />
+            <div>
+              <strong>Single</strong>
+              <span>Marital Status</span>
+            </div>
+          </div>
+          <div className="info-item">
+            <CakeRoundedIcon />
+            <div>
+              <strong>Jun 01, 2003</strong>
+              <span>Date of Birth</span>
+            </div>
+          </div>
+          <div className="info-item">
+            <PersonRoundedIcon />
+            <div>
+              <strong>Male</strong>
+              <span>Gender</span>
+            </div>
+          </div>
+          <div className="info-item">
+            <BadgeRoundedIcon />
+            <div>
+              <strong>O+</strong>
+              <span>Blood Group</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="card">
+        <div className="card__header">
+          <h3>Contact Details</h3>
+          <button className="edit-btn" type="button">
+            <EditRoundedIcon />
+            Edit
+          </button>
+        </div>
+
+        <div className="info-grid info-grid--two">
+          <div className="info-item">
+            <EmailRoundedIcon />
+            <div>
+              <strong>lalitkalyan15@gmail.com</strong>
+              <span>Email (Personal)</span>
+            </div>
+          </div>
+          <div className="info-item">
+            <PhoneRoundedIcon />
+            <div>
+              <strong>IN +91 9154807731</strong>
+              <span>Phone Number (Primary)</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="card">
+        <div className="card__header">
+          <h3>My Qualifications</h3>
+          <button className="details-btn" type="button">
+            + Add Details
+          </button>
+        </div>
+      </section>
+    </>
+  )
+}
+
+function App() {
+  const [mainTab, setMainTab] = React.useState<MainTab>(getMainTabFromUrl)
+  const [projectMode, setProjectMode] = React.useState<ProjectMode>(getProjectModeFromUrl)
+
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    params.set('tab', mainTab)
+    if (mainTab === 'projects') {
+      params.set('mode', projectMode)
+    } else {
+      params.delete('mode')
+    }
+    const query = params.toString()
+    const nextUrl = query ? `${window.location.pathname}?${query}` : window.location.pathname
+    window.history.replaceState(null, '', nextUrl)
+  }, [mainTab, projectMode])
+
+  return (
+    <div className="profile-shell">
+      <aside className="left-nav">
+        <div className="left-nav__logo" aria-hidden="true">
+          <span />
+          <span />
+        </div>
+
+        <nav className="left-nav__menu">
+          <button className="left-nav__item" type="button">
+            <HomeRoundedIcon />
+            <span>Home</span>
+          </button>
+          <button className="left-nav__item left-nav__item--active" type="button">
+            <PersonRoundedIcon />
+            <span>Me</span>
+          </button>
+          <button className="left-nav__item" type="button">
+            <BusinessRoundedIcon />
+            <span>Organization</span>
+          </button>
+        </nav>
+      </aside>
+
+      <main className="profile-main">
+        <header className="top-header">
+          <h1>Profile</h1>
+          <div className="top-header__actions">
+            <label className="search-input" aria-label="Search">
+              <SearchRoundedIcon />
+              <input type="search" placeholder="Search..." />
+            </label>
+            <button className="user-pill" type="button">
+              <img alt="Lalit Mulpuru" src={heroImage} />
+              <span>Lalit Mulpuru</span>
+              <KeyboardArrowDownRoundedIcon />
+            </button>
+          </div>
+        </header>
+
+        <section className="profile-content">
+          <aside className="left-panel">
+            <article className="profile-card">
+              <div className="profile-card__hero">
+                <img alt="Employee portrait" src={heroImage} />
+              </div>
+              <div className="profile-card__name">
+                <h2>Lalit Mulpuru</h2>
+                <MoreVertRoundedIcon />
+              </div>
+              <span className="week-off-tag">Week Off</span>
+
+              <div className="profile-contact">
+                <div>
+                  <p>Lalit.Mulpuru@pal.tech</p>
+                  <EmailRoundedIcon />
+                </div>
+                <div>
+                  <p>+91 9154807731</p>
+                  <PhoneRoundedIcon />
+                </div>
+                <div>
+                  <p>Equinox</p>
+                  <PlaceRoundedIcon />
+                </div>
+                <div>
+                  <p>Associate Business Analyst - G1</p>
+                  <BadgeRoundedIcon />
+                </div>
+                <div>
+                  <p>Jun 01, 2003</p>
+                  <CakeRoundedIcon />
+                </div>
+              </div>
+
+              <div className="profile-meta">
+                <p>PalTech</p>
+                <span>Business Unit</span>
+                <p>BA</p>
+                <span>Department</span>
+                <p>1305 - Pavan Seepana</p>
+                <span>Reporting Manager</span>
+              </div>
+            </article>
+          </aside>
+
+          <section className="right-panel">
+            <div className="banner" />
+            <nav className="section-tabs" aria-label="Profile sections">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  className={`section-tabs__tab ${mainTab === tab.id ? 'section-tabs__tab--active' : ''}`}
+                  onClick={() => setMainTab(tab.id)}
+                  type="button"
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </nav>
+
+            {mainTab === 'projects' ? (
+              <ProjectsSection mode={projectMode} onModeChange={setProjectMode} />
+            ) : (
+              <ProfileDetailView />
+            )}
+          </section>
+        </section>
+      </main>
+    </div>
+  )
+}
+
+ReactDOM.createRoot(document.getElementById('app')!).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>,
+)
