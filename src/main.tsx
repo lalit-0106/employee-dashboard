@@ -15,10 +15,12 @@ import CakeRoundedIcon from '@mui/icons-material/CakeRounded'
 import EditRoundedIcon from '@mui/icons-material/Edit'
 import DoneRoundedIcon from '@mui/icons-material/DoneRounded'
 import ArrowForwardRoundedIcon from '@mui/icons-material/ArrowForwardRounded'
+import LoginRoundedIcon from '@mui/icons-material/LoginRounded'
+import LogoutRoundedIcon from '@mui/icons-material/LogoutRounded'
 import heroImage from './assets/hero.png'
 
 type MainTab = 'about' | 'job' | 'projects'
-type ProjectMode = 'active' | 'completed'
+type ProjectMode = 'active' | 'completed' | 'talent-pool'
 type ProjectType = 'Client' | 'Internal'
 
 type UtilizationPhase = {
@@ -180,7 +182,7 @@ function getMainTabFromUrl(): MainTab {
 function getProjectModeFromUrl(): ProjectMode {
   if (typeof window === 'undefined') return 'active'
   const mode = new URLSearchParams(window.location.search).get('mode')
-  if (mode === 'active' || mode === 'completed') return mode
+  if (mode === 'active' || mode === 'completed' || mode === 'talent-pool') return mode
   return 'active'
 }
 
@@ -207,7 +209,6 @@ function ProjectsSection({ mode, onModeChange }: { mode: ProjectMode; onModeChan
   }, [completedProjects])
 
   const modeProjects = mode === 'active' ? sortedActive : sortedCompleted
-  const isTalentPool = activeProjects.length === 0 && mode === 'active'
 
   const [selectedId, setSelectedId] = React.useState(modeProjects[0]?.id ?? '')
 
@@ -219,15 +220,73 @@ function ProjectsSection({ mode, onModeChange }: { mode: ProjectMode; onModeChan
 
   const selectedProject = modeProjects.find((project) => project.id === selectedId)
 
-  // AC10/AC11: Talent Pool Logic
-  const lastRollOffDate = React.useMemo(() => {
-    if (completedProjects.length === 0) return null
-    return [...completedProjects].sort((a, b) => {
-      const dateA = a.rollOffDate ? new Date(a.rollOffDate).getTime() : 0
-      const dateB = b.rollOffDate ? new Date(b.rollOffDate).getTime() : 0
-      return dateB - dateA
-    })[0].rollOffDate
-  }, [completedProjects])
+  // AC15: Multi-period Talent Pool History (Gap Detection)
+  const talentPoolHistory = React.useMemo(() => {
+    const spans: { start: number; end: number }[] = []
+    projects.forEach(p => {
+      p.utilizationPhases.forEach(ph => {
+        spans.push({ 
+          start: new Date(ph.startDate).getTime(), 
+          end: new Date(ph.endDate).getTime() 
+        })
+      })
+      if (p.rollOffDate) {
+        const lastPhaseEnd = Math.max(...p.utilizationPhases.map(ph => new Date(ph.endDate).getTime()))
+        const rollOff = new Date(p.rollOffDate).getTime()
+        if (rollOff > lastPhaseEnd) {
+          spans.push({ start: lastPhaseEnd, end: rollOff })
+        }
+      }
+    })
+
+    if (spans.length === 0) return []
+    spans.sort((a, b) => a.start - b.start)
+    const merged: { start: number; end: number }[] = []
+    let current = spans[0]
+    for (let i = 1; i < spans.length; i++) {
+      if (spans[i].start <= current.end) {
+        current.end = Math.max(current.end, spans[i].end)
+      } else {
+        merged.push(current)
+        current = spans[i]
+      }
+    }
+    merged.push(current)
+
+    const gaps: { id: string; startDate: string; endDate: string }[] = []
+    for (let i = 0; i < merged.length - 1; i++) {
+      const gapStart = new Date(merged[i].end + 86400000)
+      const gapEnd = new Date(merged[i+1].start - 86400000)
+      if (gapEnd >= gapStart) {
+        gaps.push({
+          id: `tp-gap-${i}`,
+          startDate: gapStart.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
+          endDate: gapEnd.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })
+        })
+      }
+    }
+
+    const lastSpanEnd = merged[merged.length - 1].end
+    const today = new Date().getTime()
+    if (today > lastSpanEnd + 86400000) {
+      gaps.push({
+        id: 'tp-current',
+        startDate: new Date(lastSpanEnd + 86400000).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
+        endDate: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })
+      })
+    }
+
+    return gaps.reverse()
+  }, [])
+
+  const [selectedTpId, setSelectedTpId] = React.useState(talentPoolHistory[0]?.id ?? '')
+  const selectedTp = talentPoolHistory.find(tp => tp.id === selectedTpId)
+
+  React.useEffect(() => {
+    if (mode === 'talent-pool' && !talentPoolHistory.some(tp => tp.id === selectedTpId)) {
+      setSelectedTpId(talentPoolHistory[0]?.id ?? '')
+    }
+  }, [mode, talentPoolHistory, selectedTpId])
 
   return (
     <section className="card projects-card">
@@ -241,7 +300,7 @@ function ProjectsSection({ mode, onModeChange }: { mode: ProjectMode; onModeChan
           onClick={() => onModeChange('active')}
           type="button"
         >
-          {activeProjects.length > 0 ? 'Active Projects' : 'Talent Pool'}
+          Active Projects
         </button>
         {completedProjects.length > 0 && (
           <button
@@ -252,16 +311,30 @@ function ProjectsSection({ mode, onModeChange }: { mode: ProjectMode; onModeChan
             Completed Projects
           </button>
         )}
+        <button
+          className={`project-mode-toggle__btn ${mode === 'talent-pool' ? 'project-mode-toggle__btn--active' : ''}`}
+          onClick={() => onModeChange('talent-pool')}
+          type="button"
+        >
+          Talent Pool
+        </button>
       </div>
 
       <div className="projects-layout">
-        <aside className={`projects-list ${modeProjects.length > 4 || isTalentPool ? 'has-scroll' : ''}`}>
-          {isTalentPool ? (
-            <button className="project-item project-item--active" type="button">
-              <div className="project-item__head">
-                <strong>Talent Pool</strong>
-              </div>
-            </button>
+        <aside className={`projects-list ${modeProjects.length > 4 || (mode === 'talent-pool' && talentPoolHistory.length > 4) ? 'has-scroll' : ''}`}>
+          {mode === 'talent-pool' ? (
+            talentPoolHistory.map((tp) => (
+              <button 
+                key={tp.id} 
+                className={`project-item ${selectedTpId === tp.id ? 'project-item--tp-active' : ''}`}
+                onClick={() => setSelectedTpId(tp.id)}
+                type="button"
+              >
+                <div className="project-item__head">
+                  <strong>Talent Pool</strong>
+                </div>
+              </button>
+            ))
           ) : (
             modeProjects.map((project) => (
               <button
@@ -282,27 +355,38 @@ function ProjectsSection({ mode, onModeChange }: { mode: ProjectMode; onModeChan
         </aside>
 
         <article className="project-timeline">
-          {isTalentPool ? (
-            <>
-              <header className="project-timeline__head">
-                <h4>Talent Pool</h4>
-              </header>
-              <div className="project-tenure-row">
-                <span className="project-tenure-row__label">Tenure since last roll-off</span>
-                <span className="project-tenure-row__value">
-                  {lastRollOffDate ? calcTenure(lastRollOffDate, new Date().toDateString()) : 'N/A'}
-                </span>
-              </div>
-              <div className="timeline-track">
-                {lastRollOffDate && (
+          {mode === 'talent-pool' ? (
+            selectedTp ? (
+              <>
+                <header className="project-timeline__head">
+                  <h4>Talent Pool Status</h4>
+                </header>
+                <div className="project-tenure-row">
+                  <span className="project-tenure-row__label">Total Talent Pool Tenure</span>
+                  <span className="project-tenure-row__value">
+                    {calcTenure(selectedTp.startDate, selectedTp.endDate)}
+                  </span>
+                </div>
+                <div className="timeline-track">
                   <div className="timeline-step">
                     <span className="timeline-dot timeline-dot--rolloff" />
-                    <label>Latest Roll-off Date</label>
-                    <strong>{lastRollOffDate}</strong>
+                    <label>
+                      <LoginRoundedIcon style={{ fontSize: '14px', verticalAlign: 'middle', marginRight: '4px', color: '#ff9800' }} />
+                      Into Talent Pool
+                    </label>
+                    <strong>{selectedTp.startDate}</strong>
                   </div>
-                )}
-              </div>
-            </>
+                  <div className="timeline-step">
+                    <span className="timeline-dot timeline-dot--utilization" />
+                    <label>
+                      <LogoutRoundedIcon style={{ fontSize: '14px', verticalAlign: 'middle', marginRight: '4px', color: '#4caf50' }} />
+                      Out of Talent Pool
+                    </label>
+                    <strong>{selectedTp.endDate}</strong>
+                  </div>
+                </div>
+              </>
+            ) : <p className="no-selection">No Talent Pool history found.</p>
           ) : selectedProject ? (
             <>
               <header className="project-timeline__head">
@@ -316,7 +400,7 @@ function ProjectsSection({ mode, onModeChange }: { mode: ProjectMode; onModeChan
                 <span className="project-tenure-row__label">Total Tenure in Project</span>
                 <span className="project-tenure-row__value">
                   {/* For active projects, calculate till today as per latest user request */}
-                  {selectedProject.resolvedMode === 'active' 
+                  {selectedProject.resolvedMode === 'active'
                     ? calcTenure(selectedProject.utilizationPhases[0].startDate, new Date().toDateString())
                     : calcTenure(selectedProject.utilizationPhases[0].startDate, selectedProject.rollOffDate || selectedProject.utilizationPhases[selectedProject.utilizationPhases.length - 1].endDate)
                   }

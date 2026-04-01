@@ -514,6 +514,12 @@ button {
   padding-left: 12px;
 }
 
+.project-item--tp-active {
+  background: #fff8e1;
+  border-left: 4px solid #ffa726;
+  padding-left: 12px;
+}
+
 .project-item__head {
   display: flex;
   justify-content: space-between;
