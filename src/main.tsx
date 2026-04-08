@@ -14,14 +14,11 @@ import BadgeRoundedIcon from '@mui/icons-material/BadgeRounded'
 import CakeRoundedIcon from '@mui/icons-material/CakeRounded'
 import EditRoundedIcon from '@mui/icons-material/Edit'
 import DoneRoundedIcon from '@mui/icons-material/DoneRounded'
-import ArrowForwardRoundedIcon from '@mui/icons-material/ArrowForwardRounded'
-import LoginRoundedIcon from '@mui/icons-material/LoginRounded'
-import LogoutRoundedIcon from '@mui/icons-material/LogoutRounded'
 import heroImage from './assets/hero.png'
 
 type MainTab = 'about' | 'job' | 'projects'
-type ProjectMode = 'active' | 'completed' | 'talent-pool'
-type ProjectType = 'Client' | 'Internal'
+type ProjectType = 'Client' | 'Internal' | 'Support Development' | 'Training' | 'Talent Pool'
+type ProjectStatus = 'Active' | 'Completed'
 
 type UtilizationPhase = {
   startDate: string
@@ -31,139 +28,200 @@ type UtilizationPhase = {
 
 type Project = {
   id: string
+  projectName: string
   accountName: string
-  name: string
-  type: ProjectType
-  mode: ProjectMode
+  projectType: ProjectType
   utilizationPhases: UtilizationPhase[]
   rollOffDate?: string
 }
 
-function calcTenure(startStr: string, endStr: string): string {
-  const start = new Date(startStr)
-  const end = new Date(endStr)
-  if (isNaN(start.getTime()) || isNaN(end.getTime())) return ''
-  let years = end.getFullYear() - start.getFullYear()
-  let months = end.getMonth() - start.getMonth()
-  let days = end.getDate() - start.getDate()
-  if (days < 0) {
-    months -= 1
-    const prevMonth = new Date(end.getFullYear(), end.getMonth(), 0)
-    days += prevMonth.getDate()
-  }
-  if (months < 0) { years -= 1; months += 12 }
-  const parts: string[] = []
-  if (years > 0) parts.push(`${years} Year${years !== 1 ? 's' : ''}`)
-  if (months > 0) parts.push(`${months} Month${months !== 1 ? 's' : ''}`)
-  if (days > 0) parts.push(`${days} Day${days !== 1 ? 's' : ''}`)
-  return parts.length > 0 ? parts.join(' ') : '< 1 Day'
+type DateRange = {
+  start: Date
+  end: Date
 }
 
-// AC9/AC10: Resolve project mode
-function resolveMode(project: Project): 'active' | 'completed' {
-  if (!project.rollOffDate) return 'active'
-  const rollOff = new Date(project.rollOffDate)
-  const hasPhaseAfterRollOff = project.utilizationPhases.some(
-    (p) => new Date(p.startDate) > rollOff
-  )
-  return hasPhaseAfterRollOff ? 'active' : 'completed'
+type TimelineRange = {
+  start: Date
+  end: Date
+  utilizationPercentage?: string
 }
 
-function getUtilizationValue(project: Project): number {
-  const latest = project.utilizationPhases[project.utilizationPhases.length - 1]
-  return parseInt(latest?.utilizationPercentage || '0', 10)
+type TimelinePoint = {
+  date: Date
+  utilization: number
+  talentPool: number
 }
+
+type ProjectTableRow = {
+  id: string
+  projectName: string
+  accountName: string
+  projectType: ProjectType
+  status: ProjectStatus
+  tenureLabel: string
+  tenureDays: number
+  utilizationTimeline: TimelineRange[]
+  talentPoolTimeline: TimelineRange[]
+  timelinePoints: TimelinePoint[]
+  startDateInRange: Date | null
+  rollOffDateInRange: Date | null
+  isTalentPoolSummary?: boolean
+}
+
+type ProjectColumnKey =
+  | 'projectName'
+  | 'accountName'
+  | 'projectType'
+  | 'tenure'
+  | 'status'
+
+type ProjectColumnDef = {
+  key: ProjectColumnKey
+  label: string
+  defaultWidth: number
+  minWidth: number
+}
+
+const PROJECT_COLUMNS: ProjectColumnDef[] = [
+  { key: 'projectName', label: 'Project Name', defaultWidth: 190, minWidth: 80 },
+  { key: 'accountName', label: 'Account Name', defaultWidth: 170, minWidth: 80 },
+  { key: 'projectType', label: 'Project Type', defaultWidth: 150, minWidth: 75 },
+  { key: 'tenure', label: 'Tenure', defaultWidth: 150, minWidth: 95 },
+  { key: 'status', label: 'Status', defaultWidth: 120, minWidth: 70 },
+]
+
+const PROJECT_COLUMN_BY_KEY: Record<ProjectColumnKey, ProjectColumnDef> = PROJECT_COLUMNS.reduce(
+  (accumulator, column) => {
+    accumulator[column.key] = column
+    return accumulator
+  },
+  {} as Record<ProjectColumnKey, ProjectColumnDef>,
+)
+
+const DEFAULT_COLUMN_ORDER: ProjectColumnKey[] = PROJECT_COLUMNS.map((column) => column.key)
+const DEFAULT_COLUMN_WIDTHS: Record<ProjectColumnKey, number> = PROJECT_COLUMNS.reduce(
+  (accumulator, column) => {
+    accumulator[column.key] = column.defaultWidth
+    return accumulator
+  },
+  {} as Record<ProjectColumnKey, number>,
+)
 
 const projects: Project[] = [
   {
-    id: 'apollo-core',
-    accountName: 'Apollo',
-    name: 'Apollo Core Modernization',
-    type: 'Client',
-    mode: 'active',
+    id: 'equinox-workforce-modernization',
+    projectName: 'Workforce Modernization',
+    accountName: 'Equinox',
+    projectType: 'Client',
     utilizationPhases: [
       { startDate: 'Mar 31, 2026', endDate: 'Apr 30, 2026', utilizationPercentage: '40%' },
-      { startDate: 'Apr 30, 2026', endDate: 'Dec 31, 2026', utilizationPercentage: '40%' },
+      { startDate: 'May 01, 2026', endDate: 'Dec 31, 2026', utilizationPercentage: '40%' },
     ],
   },
   {
-    id: 'workforce-pulse',
-    accountName: 'Workforce',
-    name: 'Workforce Pulse Analytics',
-    type: 'Client',
-    mode: 'active',
+    id: 'pgl-claims-automation',
+    projectName: 'Claims Automation Platform',
+    accountName: 'PGL Insurance',
+    projectType: 'Client',
     utilizationPhases: [
-      { startDate: 'Feb 10, 2026', endDate: 'May 15, 2026', utilizationPercentage: '74%' },
-      { startDate: 'May 16, 2026', endDate: 'Sep 12, 2026', utilizationPercentage: '66%' },
+      { startDate: 'Nov 10, 2025', endDate: 'Jan 31, 2026', utilizationPercentage: '62%' },
+      { startDate: 'Feb 01, 2026', endDate: 'Aug 31, 2026', utilizationPercentage: '68%' },
     ],
   },
   {
-    id: 'ops-compass',
-    accountName: 'PalTech Internal',
-    name: 'Ops Compass Accelerator',
-    type: 'Internal',
-    mode: 'active',
+    id: 'paltech-resource-planner',
+    projectName: 'Resource Planner Revamp',
+    accountName: 'PalTech Corporate IT',
+    projectType: 'Internal',
     utilizationPhases: [
-      { startDate: 'Mar 01, 2026', endDate: 'Jun 10, 2026', utilizationPercentage: '48%' },
-      { startDate: 'Jun 11, 2026', endDate: 'Aug 01, 2026', utilizationPercentage: '52%' },
+      { startDate: 'Oct 14, 2025', endDate: 'Jan 15, 2026', utilizationPercentage: '48%' },
+      { startDate: 'Jan 20, 2026', endDate: 'Jun 30, 2026', utilizationPercentage: '52%' },
     ],
   },
   {
-    id: 'northstar-migration',
-    accountName: 'NorthStar',
-    name: 'NorthStar Cloud Migration',
-    type: 'Client',
-    mode: 'completed',
+    id: 'jira-copilot-rollout',
+    projectName: 'Jira Copilot Rollout',
+    accountName: 'PalTech Engineering Excellence',
+    projectType: 'Support Development',
     utilizationPhases: [
-      { startDate: 'Apr 02, 2025', endDate: 'Aug 15, 2025', utilizationPercentage: '89%' },
-      { startDate: 'Aug 16, 2025', endDate: 'Nov 18, 2025', utilizationPercentage: '70%' },
+      { startDate: 'Dec 02, 2025', endDate: 'Mar 31, 2026', utilizationPercentage: '58%' },
+      { startDate: 'Apr 01, 2026', endDate: 'Sep 30, 2026', utilizationPercentage: '61%' },
+    ],
+  },
+  {
+    id: 'cloud-upskilling-cohort',
+    projectName: 'Cloud Upskilling Cohort',
+    accountName: 'PalTech Learning & Development',
+    projectType: 'Training',
+    utilizationPhases: [
+      { startDate: 'Nov 03, 2025', endDate: 'Jan 09, 2026', utilizationPercentage: '35%' },
+      { startDate: 'Jan 12, 2026', endDate: 'May 29, 2026', utilizationPercentage: '42%' },
+    ],
+  },
+  {
+    id: 'northstar-cloud-migration-wave2',
+    projectName: 'Cloud Migration Wave 2',
+    accountName: 'NorthStar Logistics',
+    projectType: 'Client',
+    utilizationPhases: [
+      { startDate: 'Apr 02, 2025', endDate: 'Aug 15, 2025', utilizationPercentage: '88%' },
+      { startDate: 'Aug 18, 2025', endDate: 'Nov 18, 2025', utilizationPercentage: '72%' },
     ],
     rollOffDate: 'Nov 30, 2025',
   },
   {
-    id: 'skills-forge',
-    accountName: 'PalTech Internal',
-    name: 'Skills Forge Platform',
-    type: 'Internal',
-    mode: 'completed',
+    id: 'hrms-wave',
+    projectName: 'HRMS Experience Wave',
+    accountName: 'PalTech People Ops',
+    projectType: 'Internal',
     utilizationPhases: [
-      { startDate: 'Jan 20, 2025', endDate: 'Apr 30, 2025', utilizationPercentage: '64%' },
-      { startDate: 'May 01, 2025', endDate: 'Jul 22, 2025', utilizationPercentage: '57%' },
+      { startDate: 'Mar 10, 2025', endDate: 'Jun 30, 2025', utilizationPercentage: '50%' },
+      { startDate: 'Jul 14, 2025', endDate: 'Oct 20, 2025', utilizationPercentage: '47%' },
     ],
-    rollOffDate: 'Aug 04, 2025',
+    rollOffDate: 'Oct 31, 2025',
   },
   {
-    id: 'nexus-revamp',
-    accountName: 'Nexus Corp',
-    name: 'Nexus Platform Revamp',
-    type: 'Client',
-    mode: 'completed',
+    id: 'skills-forge-platform',
+    projectName: 'Skills Forge Platform',
+    accountName: 'PalTech Academy',
+    projectType: 'Training',
     utilizationPhases: [
-      { startDate: 'Sep 01, 2025', endDate: 'Dec 15, 2025', utilizationPercentage: '80%' },
-      { startDate: 'Jan 05, 2026', endDate: 'Jun 30, 2026', utilizationPercentage: '72%' },
+      { startDate: 'Feb 03, 2025', endDate: 'May 16, 2025', utilizationPercentage: '60%' },
+      { startDate: 'Jun 02, 2025', endDate: 'Jul 25, 2025', utilizationPercentage: '54%' },
     ],
-    rollOffDate: 'Dec 31, 2025',
+    rollOffDate: 'Aug 15, 2025',
   },
   {
-    id: 'extra-1',
-    accountName: 'Global Tech',
-    name: 'Cloud Infrastructure Upgrade',
-    type: 'Client',
-    mode: 'active',
+    id: 'helpdesk-360',
+    projectName: 'Helpdesk 360',
+    accountName: 'Support Hub',
+    projectType: 'Support Development',
     utilizationPhases: [
-      { startDate: 'Jan 15, 2026', endDate: 'Dec 31, 2026', utilizationPercentage: '90%' },
+      { startDate: 'Sep 01, 2025', endDate: 'Dec 15, 2025', utilizationPercentage: '62%' },
+      { startDate: 'Jan 10, 2026', endDate: 'Mar 20, 2026', utilizationPercentage: '58%' },
     ],
+    rollOffDate: 'Mar 31, 2026',
   },
   {
-    id: 'extra-2',
-    accountName: 'InnoSystems',
-    name: 'Mobile Gateway Implementation',
-    type: 'Client',
-    mode: 'active',
+    id: 'legacy-billing-stabilization',
+    projectName: 'Legacy Billing Stabilization',
+    accountName: 'Aster Telecom',
+    projectType: 'Client',
     utilizationPhases: [
-      { startDate: 'Feb 01, 2026', endDate: 'Nov 30, 2026', utilizationPercentage: '85%' },
+      { startDate: 'Oct 07, 2025', endDate: 'Jan 03, 2026', utilizationPercentage: '74%' },
+      { startDate: 'Jan 06, 2026', endDate: 'Feb 14, 2026', utilizationPercentage: '63%' },
     ],
-  }
+    rollOffDate: 'Feb 28, 2026',
+  },
+  {
+    id: 'infra-pods-support',
+    projectName: 'Infra Pod Support',
+    accountName: 'Managed Services',
+    projectType: 'Support Development',
+    utilizationPhases: [
+      { startDate: 'Jan 05, 2026', endDate: 'Jun 30, 2026', utilizationPercentage: '68%' },
+    ],
+  },
 ]
 
 const tabs: { id: MainTab; label: string }[] = [
@@ -172,121 +230,638 @@ const tabs: { id: MainTab; label: string }[] = [
   { id: 'projects', label: 'Projects' },
 ]
 
+function parseDate(value: string): Date | null {
+  if (!value) {
+    return null
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const parsedIso = new Date(`${value}T00:00:00`)
+    return Number.isNaN(parsedIso.getTime()) ? null : parsedIso
+  }
+
+  const parsed = new Date(value)
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
+function formatDate(date: Date): string {
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: '2-digit',
+    year: 'numeric',
+  })
+}
+
+function toDateInputValue(date: Date): string {
+  const year = date.getFullYear()
+  const month = `${date.getMonth() + 1}`.padStart(2, '0')
+  const day = `${date.getDate()}`.padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function normalizeRange(start: Date, end: Date): DateRange {
+  if (start <= end) {
+    return { start, end }
+  }
+  return { start: end, end: start }
+}
+
+function rangesOverlap(a: DateRange, b: DateRange): boolean {
+  return a.start <= b.end && a.end >= b.start
+}
+
+function clipRange(source: DateRange, filter: DateRange): DateRange | null {
+  if (!rangesOverlap(source, filter)) {
+    return null
+  }
+
+  const start = source.start > filter.start ? source.start : filter.start
+  const end = source.end < filter.end ? source.end : filter.end
+
+  if (end < start) {
+    return null
+  }
+
+  return { start, end }
+}
+
+function daysBetweenInclusive(start: Date, end: Date): number {
+  const msPerDay = 1000 * 60 * 60 * 24
+  const utcStart = Date.UTC(start.getFullYear(), start.getMonth(), start.getDate())
+  const utcEnd = Date.UTC(end.getFullYear(), end.getMonth(), end.getDate())
+  return Math.floor((utcEnd - utcStart) / msPerDay) + 1
+}
+
+function getTenureFromDays(days: number): string {
+  if (days <= 0) {
+    return '0 yrs 0 months'
+  }
+
+  const years = Math.floor(days / 365)
+  const months = Math.floor((days % 365) / 30)
+  return `${years} yrs ${months} months`
+}
+
+function resolveStatus(project: Project): ProjectStatus {
+  if (!project.rollOffDate) {
+    return 'Active'
+  }
+
+  const rollOff = parseDate(project.rollOffDate)
+  if (!rollOff) {
+    return 'Active'
+  }
+
+  const hasPhaseAfterRollOff = project.utilizationPhases.some((phase) => {
+    const start = parseDate(phase.startDate)
+    return start ? start > rollOff : false
+  })
+
+  return hasPhaseAfterRollOff ? 'Active' : 'Completed'
+}
+
+function getUtilizationTimeline(project: Project): TimelineRange[] {
+  const ranges: TimelineRange[] = []
+  for (const phase of project.utilizationPhases) {
+    const start = parseDate(phase.startDate)
+    const end = parseDate(phase.endDate)
+    if (!start || !end) {
+      continue
+    }
+    const ordered = normalizeRange(start, end)
+    ranges.push({
+      start: ordered.start,
+      end: ordered.end,
+      utilizationPercentage: phase.utilizationPercentage,
+    })
+  }
+  return ranges.sort((a, b) => a.start.getTime() - b.start.getTime())
+}
+
+function getTalentPoolTimeline(project: Project): TimelineRange[] {
+  const utilization = getUtilizationTimeline(project)
+  if (utilization.length === 0) {
+    return []
+  }
+
+  const talentPool: TimelineRange[] = []
+
+  for (let index = 0; index < utilization.length - 1; index += 1) {
+    const currentEnd = utilization[index].end
+    const nextStart = utilization[index + 1].start
+
+    if (nextStart.getTime() > currentEnd.getTime()) {
+      const gapStart = new Date(currentEnd)
+      gapStart.setDate(gapStart.getDate() + 1)
+
+      const gapEnd = new Date(nextStart)
+      gapEnd.setDate(gapEnd.getDate() - 1)
+
+      if (gapEnd >= gapStart) {
+        talentPool.push({ start: gapStart, end: gapEnd })
+      }
+    }
+  }
+
+  if (project.rollOffDate) {
+    const rollOff = parseDate(project.rollOffDate)
+    const lastUtilizationEnd = utilization[utilization.length - 1].end
+
+    if (rollOff && rollOff > lastUtilizationEnd) {
+      const gapStart = new Date(lastUtilizationEnd)
+      gapStart.setDate(gapStart.getDate() + 1)
+      if (rollOff >= gapStart) {
+        talentPool.push({ start: gapStart, end: rollOff })
+      }
+    }
+  }
+
+  return talentPool
+}
+
+function applyRangeFilter(ranges: TimelineRange[], rangeFilter: DateRange | null): TimelineRange[] {
+  if (!rangeFilter) {
+    return ranges
+  }
+
+  const clippedRanges: TimelineRange[] = []
+  for (const range of ranges) {
+    const clipped = clipRange({ start: range.start, end: range.end }, rangeFilter)
+    if (!clipped) {
+      continue
+    }
+    clippedRanges.push({
+      start: clipped.start,
+      end: clipped.end,
+      utilizationPercentage: range.utilizationPercentage,
+    })
+  }
+  return clippedRanges
+}
+
+function getUtilizationNumber(value: string | undefined): number {
+  if (!value) {
+    return 0
+  }
+  const parsed = Number.parseInt(value.replace('%', '').trim(), 10)
+  if (Number.isNaN(parsed)) {
+    return 0
+  }
+  return Math.min(100, Math.max(0, parsed))
+}
+
+function buildTimelinePoints(utilizationTimeline: TimelineRange[]): TimelinePoint[] {
+  const timestampMap = new Map<number, number>()
+
+  utilizationTimeline.forEach((range) => {
+    const utilization = getUtilizationNumber(range.utilizationPercentage)
+    timestampMap.set(range.start.getTime(), utilization)
+    timestampMap.set(range.end.getTime(), utilization)
+  })
+
+  return [...timestampMap.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([timestamp, utilization]) => ({
+      date: new Date(timestamp),
+      utilization,
+      talentPool: Math.max(0, 100 - utilization),
+    }))
+}
+
+function buildTalentPoolSummaryRows(baseRows: ProjectTableRow[]): ProjectTableRow[] {
+  const scopedRows = baseRows.filter((row) => row.timelinePoints.length > 0)
+  if (scopedRows.length === 0) {
+    return []
+  }
+
+  const utilizationByTimestamp = new Map<number, number[]>()
+  scopedRows.forEach((row) => {
+    row.timelinePoints.forEach((point) => {
+      const key = point.date.getTime()
+      const bucket = utilizationByTimestamp.get(key) ?? []
+      bucket.push(point.utilization)
+      utilizationByTimestamp.set(key, bucket)
+    })
+  })
+
+  const summaryPoints: TimelinePoint[] = [...utilizationByTimestamp.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([timestamp, utilizationValues]) => {
+      const averageUtilization = utilizationValues.reduce((sum, value) => sum + value, 0) / utilizationValues.length
+      const roundedUtilization = Math.round(averageUtilization)
+      return {
+        date: new Date(timestamp),
+        utilization: roundedUtilization,
+        talentPool: Math.max(0, 100 - roundedUtilization),
+      }
+    })
+
+  const summaryStatus: ProjectStatus = scopedRows.some((row) => row.status === 'Active') ? 'Active' : 'Completed'
+  const summaryStart = summaryPoints[0]?.date ?? null
+  const summaryEnd = summaryPoints[summaryPoints.length - 1]?.date ?? null
+  const summaryTenureDays = summaryStart && summaryEnd ? daysBetweenInclusive(summaryStart, summaryEnd) : 0
+
+  const row: ProjectTableRow = {
+    id: 'talent-pool-summary',
+    projectName: 'Talent Pool',
+    accountName: 'Talent Pool',
+    projectType: 'Talent Pool',
+    status: summaryStatus,
+    tenureLabel: getTenureFromDays(summaryTenureDays),
+    tenureDays: summaryTenureDays,
+    utilizationTimeline: [],
+    talentPoolTimeline: [],
+    timelinePoints: summaryPoints,
+    startDateInRange: summaryStart,
+    rollOffDateInRange: summaryStatus === 'Completed' ? summaryEnd : null,
+    isTalentPoolSummary: true,
+  }
+
+  return [row]
+}
+
+function isWithinRange(date: Date, rangeFilter: DateRange | null): boolean {
+  if (!rangeFilter) {
+    return true
+  }
+  return date >= rangeFilter.start && date <= rangeFilter.end
+}
+
+function getTypeClass(projectType: ProjectType): string {
+  if (projectType === 'Client') {
+    return 'type-pill--client'
+  }
+  if (projectType === 'Internal') {
+    return 'type-pill--internal'
+  }
+  if (projectType === 'Support Development') {
+    return 'type-pill--support'
+  }
+  if (projectType === 'Talent Pool') {
+    return 'type-pill--talent'
+  }
+  return 'type-pill--training'
+}
+
 function getMainTabFromUrl(): MainTab {
-  if (typeof window === 'undefined') return 'job'
+  if (typeof window === 'undefined') {
+    return 'job'
+  }
   const tab = new URLSearchParams(window.location.search).get('tab')
-  if (tab === 'about' || tab === 'job' || tab === 'projects') return tab
+  if (tab === 'about' || tab === 'job' || tab === 'projects') {
+    return tab
+  }
   return 'job'
 }
 
-function getProjectModeFromUrl(): ProjectMode {
-  if (typeof window === 'undefined') return 'active'
-  const mode = new URLSearchParams(window.location.search).get('mode')
-  if (mode === 'active' || mode === 'completed' || mode === 'talent-pool') return mode
-  return 'active'
-}
+function ProjectsSection() {
+  const today = React.useMemo(() => new Date(), [])
+  const defaultFrom = React.useMemo(() => {
+    const value = new Date(today)
+    value.setMonth(value.getMonth() - 6)
+    return toDateInputValue(value)
+  }, [today])
 
-function ProjectsSection({ mode, onModeChange }: { mode: ProjectMode; onModeChange: (mode: ProjectMode) => void }) {
-  const resolvedProjects = React.useMemo(() => {
-    return projects.map(p => ({ ...p, resolvedMode: resolveMode(p) }))
-  }, [])
+  const [draftFromDate, setDraftFromDate] = React.useState(defaultFrom)
+  const [draftToDate, setDraftToDate] = React.useState(toDateInputValue(today))
+  const [appliedFromDate, setAppliedFromDate] = React.useState(defaultFrom)
+  const [appliedToDate, setAppliedToDate] = React.useState(toDateInputValue(today))
+  const [dateError, setDateError] = React.useState('')
 
-  const activeProjects = resolvedProjects.filter(p => p.resolvedMode === 'active')
-  const completedProjects = resolvedProjects.filter(p => p.resolvedMode === 'completed')
+  const [projectNameFilter, setProjectNameFilter] = React.useState('')
+  const [accountNameFilter, setAccountNameFilter] = React.useState('')
+  const [projectTypeFilter, setProjectTypeFilter] = React.useState<'all' | ProjectType>('all')
+  const [statusFilter, setStatusFilter] = React.useState<'all' | ProjectStatus>('all')
+  const [columnOrder, setColumnOrder] = React.useState<ProjectColumnKey[]>(DEFAULT_COLUMN_ORDER)
+  const [columnWidths, setColumnWidths] = React.useState<Record<ProjectColumnKey, number>>(DEFAULT_COLUMN_WIDTHS)
+  const [draggedColumnKey, setDraggedColumnKey] = React.useState<ProjectColumnKey | null>(null)
+  const [dragOverColumnKey, setDragOverColumnKey] = React.useState<ProjectColumnKey | null>(null)
+  const [timelineModalRowId, setTimelineModalRowId] = React.useState<string | null>(null)
+  const resizeStateRef = React.useRef<{ key: ProjectColumnKey; startX: number; startWidth: number } | null>(null)
 
-  // AC4: Sort Active Projects by utilization descending
-  const sortedActive = React.useMemo(() => {
-    return [...activeProjects].sort((a, b) => getUtilizationValue(b) - getUtilizationValue(a))
-  }, [activeProjects])
-
-  // AC12: Sort Completed Projects by latest roll-off date descending
-  const sortedCompleted = React.useMemo(() => {
-    return [...completedProjects].sort((a, b) => {
-      const dateA = a.rollOffDate ? new Date(a.rollOffDate).getTime() : 0
-      const dateB = b.rollOffDate ? new Date(b.rollOffDate).getTime() : 0
-      return dateB - dateA
-    })
-  }, [completedProjects])
-
-  const modeProjects = mode === 'active' ? sortedActive : sortedCompleted
-
-  const [selectedId, setSelectedId] = React.useState(modeProjects[0]?.id ?? '')
+  const orderedColumns = React.useMemo(
+    () => columnOrder.map((columnKey) => PROJECT_COLUMN_BY_KEY[columnKey]),
+    [columnOrder],
+  )
 
   React.useEffect(() => {
-    if (!modeProjects.some((project) => project.id === selectedId)) {
-      setSelectedId(modeProjects[0]?.id ?? '')
+    function onMouseMove(event: MouseEvent): void {
+      const resizeState = resizeStateRef.current
+      if (!resizeState) {
+        return
+      }
+
+      const column = PROJECT_COLUMN_BY_KEY[resizeState.key]
+      const delta = event.clientX - resizeState.startX
+      const nextWidth = Math.max(column.minWidth, Math.round(resizeState.startWidth + delta))
+
+      setColumnWidths((previous) => ({
+        ...previous,
+        [resizeState.key]: nextWidth,
+      }))
     }
-  }, [modeProjects, selectedId])
 
-  const selectedProject = modeProjects.find((project) => project.id === selectedId)
+    function onMouseUp(): void {
+      resizeStateRef.current = null
+    }
 
-  // AC15: Multi-period Talent Pool History (Gap Detection)
-  const talentPoolHistory = React.useMemo(() => {
-    const spans: { start: number; end: number }[] = []
-    projects.forEach(p => {
-      p.utilizationPhases.forEach(ph => {
-        spans.push({ 
-          start: new Date(ph.startDate).getTime(), 
-          end: new Date(ph.endDate).getTime() 
-        })
-      })
-      if (p.rollOffDate) {
-        const lastPhaseEnd = Math.max(...p.utilizationPhases.map(ph => new Date(ph.endDate).getTime()))
-        const rollOff = new Date(p.rollOffDate).getTime()
-        if (rollOff > lastPhaseEnd) {
-          spans.push({ start: lastPhaseEnd, end: rollOff })
+    window.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('mouseup', onMouseUp)
+
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('mouseup', onMouseUp)
+    }
+  }, [])
+
+  function onResizeStart(event: React.MouseEvent<HTMLSpanElement>, columnKey: ProjectColumnKey): void {
+    event.preventDefault()
+    event.stopPropagation()
+    resizeStateRef.current = {
+      key: columnKey,
+      startX: event.clientX,
+      startWidth: columnWidths[columnKey] ?? PROJECT_COLUMN_BY_KEY[columnKey].defaultWidth,
+    }
+  }
+
+  function moveColumn(sourceKey: ProjectColumnKey, targetKey: ProjectColumnKey): void {
+    setColumnOrder((previousOrder) => {
+      const sourceIndex = previousOrder.indexOf(sourceKey)
+      const targetIndex = previousOrder.indexOf(targetKey)
+      if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) {
+        return previousOrder
+      }
+
+      const nextOrder = [...previousOrder]
+      const [removed] = nextOrder.splice(sourceIndex, 1)
+      nextOrder.splice(targetIndex, 0, removed)
+      return nextOrder
+    })
+  }
+
+  function onColumnDragStart(columnKey: ProjectColumnKey): void {
+    setDraggedColumnKey(columnKey)
+  }
+
+  function onColumnDragOver(event: React.DragEvent<HTMLTableCellElement>, columnKey: ProjectColumnKey): void {
+    event.preventDefault()
+    if (draggedColumnKey && draggedColumnKey !== columnKey) {
+      setDragOverColumnKey(columnKey)
+    }
+  }
+
+  function onColumnDrop(event: React.DragEvent<HTMLTableCellElement>, columnKey: ProjectColumnKey): void {
+    event.preventDefault()
+    if (draggedColumnKey && draggedColumnKey !== columnKey) {
+      moveColumn(draggedColumnKey, columnKey)
+    }
+    setDraggedColumnKey(null)
+    setDragOverColumnKey(null)
+  }
+
+  function onColumnDragEnd(): void {
+    setDraggedColumnKey(null)
+    setDragOverColumnKey(null)
+  }
+
+  const appliedRangeFilter = React.useMemo(() => {
+    const start = parseDate(appliedFromDate)
+    const end = parseDate(appliedToDate)
+    if (!start || !end) {
+      return null
+    }
+    return normalizeRange(start, end)
+  }, [appliedFromDate, appliedToDate])
+
+  const rows = React.useMemo(() => {
+    const baseRows = projects
+      .map((project) => {
+        const utilizationTimeline = applyRangeFilter(getUtilizationTimeline(project), appliedRangeFilter)
+        const talentPoolTimeline = applyRangeFilter(getTalentPoolTimeline(project), appliedRangeFilter)
+        const parsedRollOffDate = project.rollOffDate ? parseDate(project.rollOffDate) : null
+        const rollOffDateInRange =
+          parsedRollOffDate && isWithinRange(parsedRollOffDate, appliedRangeFilter) ? parsedRollOffDate : null
+        const timelinePoints = buildTimelinePoints(utilizationTimeline)
+        const startDateInRange = timelinePoints[0]?.date ?? utilizationTimeline[0]?.start ?? null
+
+        if (
+          appliedRangeFilter &&
+          utilizationTimeline.length === 0 &&
+          talentPoolTimeline.length === 0 &&
+          !rollOffDateInRange &&
+          timelinePoints.length === 0
+        ) {
+          return null
         }
-      }
-    })
 
-    if (spans.length === 0) return []
-    spans.sort((a, b) => a.start - b.start)
-    const merged: { start: number; end: number }[] = []
-    let current = spans[0]
-    for (let i = 1; i < spans.length; i++) {
-      if (spans[i].start <= current.end) {
-        current.end = Math.max(current.end, spans[i].end)
-      } else {
-        merged.push(current)
-        current = spans[i]
-      }
+        const tenureDays = utilizationTimeline.reduce((total, timelineRange) => {
+          return total + daysBetweenInclusive(timelineRange.start, timelineRange.end)
+        }, 0)
+
+        const row: ProjectTableRow = {
+          id: project.id,
+          projectName: project.projectName,
+          accountName: project.accountName,
+          projectType: project.projectType,
+          status: resolveStatus(project),
+          tenureLabel: getTenureFromDays(tenureDays),
+          tenureDays,
+          utilizationTimeline,
+          talentPoolTimeline,
+          timelinePoints,
+          startDateInRange,
+          rollOffDateInRange,
+        }
+
+        return row
+      })
+      .filter((row): row is ProjectTableRow => Boolean(row))
+
+    const summaryRows = buildTalentPoolSummaryRows(baseRows)
+    const allRows = [...summaryRows, ...baseRows]
+
+    return allRows
+      .filter((row) => row.projectName.toLowerCase().includes(projectNameFilter.toLowerCase()))
+      .filter((row) => row.accountName.toLowerCase().includes(accountNameFilter.toLowerCase()))
+      .filter((row) => projectTypeFilter === 'all' || row.projectType === projectTypeFilter)
+      .filter((row) => statusFilter === 'all' || row.status === statusFilter)
+  }, [
+    accountNameFilter,
+    appliedRangeFilter,
+    projectNameFilter,
+    projectTypeFilter,
+    statusFilter,
+  ])
+
+  const timelineModalRow = React.useMemo(
+    () => rows.find((row) => row.id === timelineModalRowId) ?? null,
+    [rows, timelineModalRowId],
+  )
+
+  React.useEffect(() => {
+    if (timelineModalRowId && !timelineModalRow) {
+      setTimelineModalRowId(null)
     }
-    merged.push(current)
+  }, [timelineModalRow, timelineModalRowId])
 
-    const gaps: { id: string; startDate: string; endDate: string }[] = []
-    for (let i = 0; i < merged.length - 1; i++) {
-      const gapStart = new Date(merged[i].end + 86400000)
-      const gapEnd = new Date(merged[i+1].start - 86400000)
-      if (gapEnd >= gapStart) {
-        gaps.push({
-          id: `tp-gap-${i}`,
-          startDate: gapStart.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
-          endDate: gapEnd.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })
-        })
-      }
+  function onApplyDateRange(): void {
+    const start = parseDate(draftFromDate)
+    const end = parseDate(draftToDate)
+
+    if (!start || !end) {
+      setDateError('Please select both From and To date before applying.')
+      return
     }
 
-    const lastSpanEnd = merged[merged.length - 1].end
-    const today = new Date().getTime()
-    if (today > lastSpanEnd + 86400000) {
-      gaps.push({
-        id: 'tp-current',
-        startDate: new Date(lastSpanEnd + 86400000).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }),
-        endDate: new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })
+    if (start > end) {
+      setDateError('From date must be earlier than or equal to To date.')
+      return
+    }
+
+    setDateError('')
+    setAppliedFromDate(draftFromDate)
+    setAppliedToDate(draftToDate)
+  }
+
+  function onResetDateRange(): void {
+    const toDate = toDateInputValue(today)
+    setDraftFromDate(defaultFrom)
+    setDraftToDate(toDate)
+    setAppliedFromDate(defaultFrom)
+    setAppliedToDate(toDate)
+    setDateError('')
+  }
+
+  type TimelineNode = {
+    key: string
+    kind: 'start' | 'util' | 'rolloff' | 'talent'
+    title: string
+    value: string
+    note?: string
+  }
+
+  function getTimelineNodes(row: ProjectTableRow): TimelineNode[] {
+    if (row.isTalentPoolSummary) {
+      return row.timelinePoints.map((point, index) => ({
+        key: `${row.id}-tp-point-${index}`,
+        kind: 'talent',
+        title: 'Talent Pool',
+        value: formatDate(point.date),
+        note: `${point.talentPool}% Talent Pool`,
+      }))
+    }
+
+    const nodes: TimelineNode[] = []
+    if (row.startDateInRange) {
+      nodes.push({
+        key: `${row.id}-start`,
+        kind: 'start',
+        title: 'Start',
+        value: formatDate(row.startDateInRange),
       })
     }
 
-    return gaps.reverse()
-  }, [])
+    row.utilizationTimeline.forEach((timelineRange, index) => {
+      nodes.push({
+        key: `${row.id}-util-${index}`,
+        kind: 'util',
+        title: `Utilization ${index + 1}`,
+        value: `${formatDate(timelineRange.start)} \u2192 ${formatDate(timelineRange.end)}`,
+        note: timelineRange.utilizationPercentage
+          ? `${timelineRange.utilizationPercentage} Utilization`
+          : 'Utilization',
+      })
+    })
 
-  const [selectedTpId, setSelectedTpId] = React.useState(talentPoolHistory[0]?.id ?? '')
-  const selectedTp = talentPoolHistory.find(tp => tp.id === selectedTpId)
-
-  React.useEffect(() => {
-    if (mode === 'talent-pool' && !talentPoolHistory.some(tp => tp.id === selectedTpId)) {
-      setSelectedTpId(talentPoolHistory[0]?.id ?? '')
+    if (row.rollOffDateInRange) {
+      nodes.push({
+        key: `${row.id}-rolloff`,
+        kind: 'rolloff',
+        title: 'Roll-off',
+        value: formatDate(row.rollOffDateInRange),
+      })
     }
-  }, [mode, talentPoolHistory, selectedTpId])
+
+    return nodes
+  }
+
+  function getTimelineDotClass(kind: TimelineNode['kind']): string {
+    if (kind === 'util') {
+      return 'timeline-dot timeline-dot--utilization'
+    }
+    if (kind === 'rolloff') {
+      return 'timeline-dot timeline-dot--rolloff'
+    }
+    if (kind === 'talent') {
+      return 'timeline-dot timeline-dot--talent'
+    }
+    return 'timeline-dot'
+  }
+
+  function renderTimelineVertical(row: ProjectTableRow): React.ReactNode {
+    const nodes = getTimelineNodes(row)
+    if (nodes.length === 0) {
+      return <span className="timeline-empty">No timeline data in range</span>
+    }
+
+    return (
+      <div className="timeline-panel">
+        <div className="timeline-track timeline-track--table">
+          {nodes.map((node) => (
+            <div className="timeline-step timeline-step--table" key={node.key}>
+              <span className={getTimelineDotClass(node.kind)} />
+              <label>{node.title}</label>
+              <strong>{node.value}</strong>
+              {node.note ? <span className="timeline-utilization">{node.note}</span> : null}
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  function renderCellByColumn(row: ProjectTableRow, columnKey: ProjectColumnKey): React.ReactNode {
+    switch (columnKey) {
+      case 'projectName':
+        return (
+          <span className="cell-ellipsis" title={row.projectName}>
+            {row.projectName}
+          </span>
+        )
+      case 'accountName':
+        return (
+          <span className="cell-ellipsis" title={row.accountName}>
+            {row.accountName}
+          </span>
+        )
+      case 'projectType':
+        return <span className={`type-pill ${getTypeClass(row.projectType)}`}>{row.projectType}</span>
+      case 'tenure':
+        return (
+          <div className="tenure-cell">
+            <span className="tenure-cell__value cell-ellipsis" title={row.tenureLabel}>
+              {row.tenureLabel}
+            </span>
+            <button
+              type="button"
+              className="timeline-view-btn"
+              aria-haspopup="dialog"
+              onClick={() => setTimelineModalRowId(row.id)}
+            >
+              View Timeline
+            </button>
+          </div>
+        )
+      case 'status':
+        return (
+          <span className={`status-pill ${row.status === 'Active' ? 'status-pill--active' : 'status-pill--completed'}`}>
+            {row.status}
+          </span>
+        )
+      default:
+        return null
+    }
+  }
 
   return (
     <section className="card projects-card">
@@ -294,156 +869,128 @@ function ProjectsSection({ mode, onModeChange }: { mode: ProjectMode; onModeChan
         <h3>Projects</h3>
       </div>
 
-      <div className="project-mode-toggle">
-        <button
-          className={`project-mode-toggle__btn ${mode === 'active' ? 'project-mode-toggle__btn--active' : ''}`}
-          onClick={() => onModeChange('active')}
-          type="button"
-        >
-          Active Projects
-        </button>
-        {completedProjects.length > 0 && (
-          <button
-            className={`project-mode-toggle__btn ${mode === 'completed' ? 'project-mode-toggle__btn--active' : ''}`}
-            onClick={() => onModeChange('completed')}
-            type="button"
-          >
-            Completed Projects
+      <div className="projects-table-toolbar">
+        <div className="projects-date-range">
+          <label>
+            From
+            <input type="date" value={draftFromDate} onChange={(event) => setDraftFromDate(event.target.value)} />
+          </label>
+          <label>
+            To
+            <input type="date" value={draftToDate} onChange={(event) => setDraftToDate(event.target.value)} />
+          </label>
+          <button type="button" className="projects-btn projects-btn--primary" onClick={onApplyDateRange}>
+            Apply
           </button>
-        )}
-        <button
-          className={`project-mode-toggle__btn ${mode === 'talent-pool' ? 'project-mode-toggle__btn--active' : ''}`}
-          onClick={() => onModeChange('talent-pool')}
-          type="button"
-        >
-          Talent Pool
-        </button>
+          <button type="button" className="projects-btn projects-btn--ghost" onClick={onResetDateRange}>
+            Reset
+          </button>
+        </div>
+
+        <p className="projects-applied-range">
+          Applied Range: {formatDate(parseDate(appliedFromDate) ?? today)} to {formatDate(parseDate(appliedToDate) ?? today)}
+        </p>
       </div>
 
-      <div className="projects-layout">
-        <aside className={`projects-list ${modeProjects.length > 4 || (mode === 'talent-pool' && talentPoolHistory.length > 4) ? 'has-scroll' : ''}`}>
-          {mode === 'talent-pool' ? (
-            talentPoolHistory.map((tp) => (
-              <button 
-                key={tp.id} 
-                className={`project-item ${selectedTpId === tp.id ? 'project-item--tp-active' : ''}`}
-                onClick={() => setSelectedTpId(tp.id)}
-                type="button"
-              >
-                <div className="project-item__head">
-                  <strong>Talent Pool</strong>
-                </div>
-              </button>
-            ))
-          ) : (
-            modeProjects.map((project) => (
-              <button
-                key={project.id}
-                className={`project-item ${selectedId === project.id ? 'project-item--active' : ''}`}
-                onClick={() => setSelectedId(project.id)}
-                type="button"
-              >
-                <div className="project-item__head">
-                  <strong>{project.accountName} : {project.name}</strong>
-                  <span className={`type-pill ${project.type === 'Client' ? 'type-pill--client' : 'type-pill--internal'}`}>
-                    {project.type}
-                  </span>
-                </div>
-              </button>
-            ))
-          )}
-        </aside>
+      {dateError ? <p className="projects-error">{dateError}</p> : null}
 
-        <article className="project-timeline">
-          {mode === 'talent-pool' ? (
-            selectedTp ? (
-              <>
-                <header className="project-timeline__head">
-                  <h4>Talent Pool Status</h4>
-                </header>
-                <div className="project-tenure-row">
-                  <span className="project-tenure-row__label">Total Talent Pool Tenure</span>
-                  <span className="project-tenure-row__value">
-                    {calcTenure(selectedTp.startDate, selectedTp.endDate)}
-                  </span>
-                </div>
-                <div className="timeline-track">
-                  <div className="timeline-step">
-                    <span className="timeline-dot timeline-dot--rolloff" />
-                    <label>
-                      <LoginRoundedIcon style={{ fontSize: '14px', verticalAlign: 'middle', marginRight: '4px', color: '#ff9800' }} />
-                      Into Talent Pool
-                    </label>
-                    <strong>{selectedTp.startDate}</strong>
-                  </div>
-                  <div className="timeline-step">
-                    <span className="timeline-dot timeline-dot--utilization" />
-                    <label>
-                      <LogoutRoundedIcon style={{ fontSize: '14px', verticalAlign: 'middle', marginRight: '4px', color: '#4caf50' }} />
-                      Out of Talent Pool
-                    </label>
-                    <strong>{selectedTp.endDate}</strong>
-                  </div>
-                </div>
-              </>
-            ) : <p className="no-selection">No Talent Pool history found.</p>
-          ) : selectedProject ? (
-            <>
-              <header className="project-timeline__head">
-                <h4>{selectedProject.name}</h4>
-                <span className={`type-pill ${selectedProject.type === 'Client' ? 'type-pill--client' : 'type-pill--internal'}`}>
-                  {selectedProject.type}
-                </span>
-              </header>
-
-              <div className="project-tenure-row">
-                <span className="project-tenure-row__label">Total Tenure in Project</span>
-                <span className="project-tenure-row__value">
-                  {/* For active projects, calculate till today as per latest user request */}
-                  {selectedProject.resolvedMode === 'active'
-                    ? calcTenure(selectedProject.utilizationPhases[0].startDate, new Date().toDateString())
-                    : calcTenure(selectedProject.utilizationPhases[0].startDate, selectedProject.rollOffDate || selectedProject.utilizationPhases[selectedProject.utilizationPhases.length - 1].endDate)
-                  }
-                </span>
-              </div>
-
-              <div className={`timeline-track ${((selectedProject.rollOffDate ? 1 : 0) + selectedProject.utilizationPhases.length + 1) > 4 ? 'has-scroll' : ''}`}>
-                <div className="timeline-step">
-                  <span className="timeline-dot" />
-                  <label>Start Date</label>
-                  <strong>{selectedProject.utilizationPhases[0]?.startDate}</strong>
-                </div>
-
-                {(() => {
-                  type TimelineNode = | { kind: 'phase'; phase: UtilizationPhase; index: number } | { kind: 'rolloff'; date: string }
-                  const nodes: TimelineNode[] = [
-                    ...selectedProject.utilizationPhases.map((phase, index) => ({ kind: 'phase' as const, phase, index })),
-                    ...(selectedProject.rollOffDate ? [{ kind: 'rolloff' as const, date: selectedProject.rollOffDate }] : []),
-                  ].sort((a, b) => new Date(a.kind === 'phase' ? a.phase.startDate : a.date).getTime() - new Date(b.kind === 'phase' ? b.phase.startDate : b.date).getTime())
-
-                  return nodes.map((node, i) => node.kind === 'phase' ? (
-                    <div className="timeline-step" key={`phase-${node.index}`}>
-                      <span className="timeline-dot timeline-dot--utilization" />
-                      <strong className="timeline-range">
-                        <span>{node.phase.startDate}</span>
-                        <ArrowForwardRoundedIcon />
-                        <span>{node.phase.endDate}</span>
-                      </strong>
-                      <span className="timeline-utilization">{node.phase.utilizationPercentage} utilization</span>
-                    </div>
-                  ) : (
-                    <div className="timeline-step" key={`rolloff-${i}`}>
-                      <span className="timeline-dot timeline-dot--rolloff" />
-                      <label>Roll-off Date</label>
-                      <strong>{node.date}</strong>
-                    </div>
-                  ))
-                })()}
-              </div>
-            </>
-          ) : null}
-        </article>
+      <div className="projects-filter-grid">
+        <input
+          value={projectNameFilter}
+          onChange={(event) => setProjectNameFilter(event.target.value)}
+          placeholder="Filter Project Name"
+          aria-label="Filter Project Name"
+        />
+        <input
+          value={accountNameFilter}
+          onChange={(event) => setAccountNameFilter(event.target.value)}
+          placeholder="Filter Account Name"
+          aria-label="Filter Account Name"
+        />
+        <select value={projectTypeFilter} onChange={(event) => setProjectTypeFilter(event.target.value as 'all' | ProjectType)}>
+          <option value="all">All Types</option>
+          <option value="Client">Client</option>
+          <option value="Internal">Internal</option>
+          <option value="Support Development">Support Development</option>
+          <option value="Training">Training</option>
+        </select>
+        <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as 'all' | ProjectStatus)}>
+          <option value="all">All Status</option>
+          <option value="Active">Active</option>
+          <option value="Completed">Completed</option>
+        </select>
       </div>
+
+      <div className="projects-table-wrap">
+        <table className="projects-table">
+          <thead>
+            <tr>
+              {orderedColumns.map((column) => (
+                <th
+                  key={column.key}
+                  className={`projects-th ${draggedColumnKey === column.key ? 'projects-th--dragging' : ''} ${
+                    dragOverColumnKey === column.key ? 'projects-th--drag-over' : ''
+                  }`}
+                  style={{ width: `${columnWidths[column.key]}px`, minWidth: `${column.minWidth}px` }}
+                  draggable
+                  onDragStart={() => onColumnDragStart(column.key)}
+                  onDragOver={(event) => onColumnDragOver(event, column.key)}
+                  onDrop={(event) => onColumnDrop(event, column.key)}
+                  onDragEnd={onColumnDragEnd}
+                >
+                  <div className="projects-th__inner">
+                    <span className="projects-th__label">{column.label}</span>
+                    <span
+                      className="projects-th__resize"
+                      onMouseDown={(event) => onResizeStart(event, column.key)}
+                      role="separator"
+                      aria-label={`Resize ${column.label} column`}
+                    />
+                  </div>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <tr>
+                <td colSpan={orderedColumns.length} className="projects-empty">
+                  No records found for the applied date range and filters.
+                </td>
+              </tr>
+            ) : (
+              rows.map((row) => (
+                <tr key={row.id} className={row.isTalentPoolSummary ? 'projects-row--talent' : ''}>
+                  {orderedColumns.map((column) => (
+                    <td key={`${row.id}-${column.key}`} style={{ width: `${columnWidths[column.key]}px`, minWidth: `${column.minWidth}px` }}>
+                      {renderCellByColumn(row, column.key)}
+                    </td>
+                  ))}
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+      {timelineModalRow ? (
+        <div className="timeline-modal-backdrop" onClick={() => setTimelineModalRowId(null)}>
+          <div
+            className="timeline-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label={`${timelineModalRow.projectName} timeline`}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="timeline-modal__head">
+              <h4>{timelineModalRow.projectName} Timeline</h4>
+              <button type="button" className="timeline-modal__close" onClick={() => setTimelineModalRowId(null)}>
+                Close
+              </button>
+            </div>
+            {renderTimelineVertical(timelineModalRow)}
+          </div>
+        </div>
+      ) : null}
     </section>
   )
 }
@@ -454,33 +1001,87 @@ function ProfileDetailView() {
       <section className="card">
         <div className="card__header">
           <h3>Personal Information</h3>
-          <button className="edit-btn" type="button"><EditRoundedIcon /> Edit</button>
+          <button className="edit-btn" type="button">
+            <EditRoundedIcon /> Edit
+          </button>
         </div>
         <div className="info-grid info-grid--three">
-          <div className="info-item"><PersonRoundedIcon /><div><strong>Mulpuru Lalit Kalyan</strong><span>Name</span></div></div>
-          <div className="info-item"><BadgeRoundedIcon /><div><strong>Lalit Mulpuru</strong><span>Display Name</span></div></div>
-          <div className="info-item"><DoneRoundedIcon /><div><strong>Single</strong><span>Marital Status</span></div></div>
-          <div className="info-item"><CakeRoundedIcon /><div><strong>Jun 01, 2003</strong><span>Date of Birth</span></div></div>
-          <div className="info-item"><PersonRoundedIcon /><div><strong>Male</strong><span>Gender</span></div></div>
-          <div className="info-item"><BadgeRoundedIcon /><div><strong>O+</strong><span>Blood Group</span></div></div>
+          <div className="info-item">
+            <PersonRoundedIcon />
+            <div>
+              <strong>Mulpuru Lalit Kalyan</strong>
+              <span>Name</span>
+            </div>
+          </div>
+          <div className="info-item">
+            <BadgeRoundedIcon />
+            <div>
+              <strong>Lalit Mulpuru</strong>
+              <span>Display Name</span>
+            </div>
+          </div>
+          <div className="info-item">
+            <DoneRoundedIcon />
+            <div>
+              <strong>Single</strong>
+              <span>Marital Status</span>
+            </div>
+          </div>
+          <div className="info-item">
+            <CakeRoundedIcon />
+            <div>
+              <strong>Jun 01, 2003</strong>
+              <span>Date of Birth</span>
+            </div>
+          </div>
+          <div className="info-item">
+            <PersonRoundedIcon />
+            <div>
+              <strong>Male</strong>
+              <span>Gender</span>
+            </div>
+          </div>
+          <div className="info-item">
+            <BadgeRoundedIcon />
+            <div>
+              <strong>O+</strong>
+              <span>Blood Group</span>
+            </div>
+          </div>
         </div>
       </section>
 
       <section className="card">
         <div className="card__header">
           <h3>Contact Details</h3>
-          <button className="edit-btn" type="button"><EditRoundedIcon /> Edit</button>
+          <button className="edit-btn" type="button">
+            <EditRoundedIcon /> Edit
+          </button>
         </div>
         <div className="info-grid info-grid--two">
-          <div className="info-item"><EmailRoundedIcon /><div><strong>lalitkalyan15@gmail.com</strong><span>Email (Personal)</span></div></div>
-          <div className="info-item"><PhoneRoundedIcon /><div><strong>IN +91 9154807731</strong><span>Phone Number (Primary)</span></div></div>
+          <div className="info-item">
+            <EmailRoundedIcon />
+            <div>
+              <strong>lalitkalyan15@gmail.com</strong>
+              <span>Email (Personal)</span>
+            </div>
+          </div>
+          <div className="info-item">
+            <PhoneRoundedIcon />
+            <div>
+              <strong>IN +91 9154807731</strong>
+              <span>Phone Number (Primary)</span>
+            </div>
+          </div>
         </div>
       </section>
 
       <section className="card">
         <div className="card__header">
           <h3>My Qualifications</h3>
-          <button className="details-btn" type="button">+ Add Details</button>
+          <button className="details-btn" type="button">
+            + Add Details
+          </button>
         </div>
       </section>
     </>
@@ -489,24 +1090,36 @@ function ProfileDetailView() {
 
 function App() {
   const [mainTab, setMainTab] = React.useState<MainTab>(getMainTabFromUrl)
-  const [projectMode, setProjectMode] = React.useState<ProjectMode>(getProjectModeFromUrl)
 
   React.useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     params.set('tab', mainTab)
-    if (mainTab === 'projects') params.set('mode', projectMode)
-    else params.delete('mode')
-    window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`)
-  }, [mainTab, projectMode])
+    params.delete('mode')
+    const query = params.toString()
+    const nextUrl = query ? `${window.location.pathname}?${query}` : window.location.pathname
+    window.history.replaceState(null, '', nextUrl)
+  }, [mainTab])
 
   return (
     <div className="profile-shell">
       <aside className="left-nav">
-        <div className="left-nav__logo" aria-hidden="true"><span /><span /></div>
+        <div className="left-nav__logo" aria-hidden="true">
+          <span />
+          <span />
+        </div>
         <nav className="left-nav__menu">
-          <button className="left-nav__item" type="button"><HomeRoundedIcon /><span>Home</span></button>
-          <button className="left-nav__item left-nav__item--active" type="button"><PersonRoundedIcon /><span>Me</span></button>
-          <button className="left-nav__item" type="button"><BusinessRoundedIcon /><span>Organization</span></button>
+          <button className="left-nav__item" type="button">
+            <HomeRoundedIcon />
+            <span>Home</span>
+          </button>
+          <button className="left-nav__item left-nav__item--active" type="button">
+            <PersonRoundedIcon />
+            <span>Me</span>
+          </button>
+          <button className="left-nav__item" type="button">
+            <BusinessRoundedIcon />
+            <span>Organization</span>
+          </button>
         </nav>
       </aside>
 
@@ -514,40 +1127,77 @@ function App() {
         <header className="top-header">
           <h1>Profile</h1>
           <div className="top-header__actions">
-            <label className="search-input"><SearchRoundedIcon /><input type="search" placeholder="Search..." /></label>
-            <button className="user-pill" type="button"><img alt="Lalit Mulpuru" src={heroImage} /><span>Lalit Mulpuru</span><KeyboardArrowDownRoundedIcon /></button>
+            <label className="search-input" aria-label="Search">
+              <SearchRoundedIcon />
+              <input type="search" placeholder="Search..." />
+            </label>
+            <button className="user-pill" type="button">
+              <img alt="Lalit Mulpuru" src={heroImage} />
+              <span>Lalit Mulpuru</span>
+              <KeyboardArrowDownRoundedIcon />
+            </button>
           </div>
         </header>
 
         <section className="profile-content">
           <aside className="left-panel">
             <article className="profile-card">
-              <div className="profile-card__hero"><img alt="portrait" src={heroImage} /></div>
-              <div className="profile-card__name"><h2>Lalit Mulpuru</h2><MoreVertRoundedIcon /></div>
+              <div className="profile-card__hero">
+                <img alt="portrait" src={heroImage} />
+              </div>
+              <div className="profile-card__name">
+                <h2>Lalit Mulpuru</h2>
+                <MoreVertRoundedIcon />
+              </div>
               <span className="week-off-tag">Week Off</span>
               <div className="profile-contact">
-                <div><p>Lalit.Mulpuru@pal.tech</p><EmailRoundedIcon /></div>
-                <div><p>+91 9154807731</p><PhoneRoundedIcon /></div>
-                <div><p>Equinox</p><PlaceRoundedIcon /></div>
-                <div><p>Associate Business Analyst - G1</p><BadgeRoundedIcon /></div>
-                <div><p>Jun 01, 2003</p><CakeRoundedIcon /></div>
+                <div>
+                  <p>Lalit.Mulpuru@pal.tech</p>
+                  <EmailRoundedIcon />
+                </div>
+                <div>
+                  <p>+91 9154807731</p>
+                  <PhoneRoundedIcon />
+                </div>
+                <div>
+                  <p>Equinox</p>
+                  <PlaceRoundedIcon />
+                </div>
+                <div>
+                  <p>Associate Business Analyst - G1</p>
+                  <BadgeRoundedIcon />
+                </div>
+                <div>
+                  <p>Jun 01, 2003</p>
+                  <CakeRoundedIcon />
+                </div>
               </div>
               <div className="profile-meta">
-                <p>PalTech</p><span>Business Unit</span>
-                <p>BA</p><span>Department</span>
-                <p>1305 - Pavan Seepana</p><span>Reporting Manager</span>
+                <p>PalTech</p>
+                <span>Business Unit</span>
+                <p>BA</p>
+                <span>Department</span>
+                <p>1305 - Pavan Seepana</p>
+                <span>Reporting Manager</span>
               </div>
             </article>
           </aside>
 
           <section className="right-panel">
             <div className="banner" />
-            <nav className="section-tabs">
+            <nav className="section-tabs" aria-label="Profile sections">
               {tabs.map((tab) => (
-                <button key={tab.id} className={`section-tabs__tab ${mainTab === tab.id ? 'section-tabs__tab--active' : ''}`} onClick={() => setMainTab(tab.id)} type="button">{tab.label}</button>
+                <button
+                  key={tab.id}
+                  className={`section-tabs__tab ${mainTab === tab.id ? 'section-tabs__tab--active' : ''}`}
+                  onClick={() => setMainTab(tab.id)}
+                  type="button"
+                >
+                  {tab.label}
+                </button>
               ))}
             </nav>
-            {mainTab === 'projects' ? <ProjectsSection mode={projectMode} onModeChange={setProjectMode} /> : <ProfileDetailView />}
+            {mainTab === 'projects' ? <ProjectsSection /> : <ProfileDetailView />}
           </section>
         </section>
       </main>
@@ -555,4 +1205,8 @@ function App() {
   )
 }
 
-ReactDOM.createRoot(document.getElementById('app')!).render(<React.StrictMode><App /></React.StrictMode>)
+ReactDOM.createRoot(document.getElementById('app')!).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>,
+)
