@@ -294,12 +294,9 @@ function daysBetweenInclusive(start: Date, end: Date): number {
 
 function getTenureFromDays(days: number): string {
   if (days <= 0) {
-    return '0 yrs 0 months'
+    return '0 days'
   }
-
-  const years = Math.floor(days / 365)
-  const months = Math.floor((days % 365) / 30)
-  return `${years} yrs ${months} months`
+  return `${days} day${days === 1 ? '' : 's'}`
 }
 
 function resolveStatus(project: Project): ProjectStatus {
